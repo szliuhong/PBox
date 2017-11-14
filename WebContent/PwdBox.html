@@ -1,0 +1,333 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<meta  charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>
+</title>
+<link rel="stylesheet"  href="css/jquery.mobile-1.4.5.css" />
+<script src="js/jquery-2.1.0.min.js"></script>
+<script src="js/jquery.mobile-1.4.5.min.js"></script>
+<script src="js/crypto-js.js"></script>
+	<script>
+		var isEdited= false;
+
+        function md5Encrypt(data) {
+            return CryptoJS.MD5(data).toString();
+        }
+
+        function aesEncrypt(data, key) {
+            var encrypted = CryptoJS.AES.encrypt(data, key, {
+                mode: CryptoJS.mode.ECB,
+                padding: CryptoJS.pad.Pkcs7
+            });
+            return encrypted.toString();
+        }
+
+        function aesDecrypt(encrypted, key) {
+            var decrypted = CryptoJS.AES.decrypt(encrypted, key, {
+                mode: CryptoJS.mode.ECB,
+                padding: CryptoJS.pad.Pkcs7
+            });
+            decrypted = CryptoJS.enc.Utf8.stringify(decrypted);// 转换为 utf8 字符串
+            return decrypted;
+        }
+
+		var hasLogined=false;
+        
+        var appDB={
+            name:"liuhong",
+            version:1,
+            db:null,
+            ojstore:{
+                name:"kp_lh",//存储空间表的名字
+                keypath:"appName"//主键
+            }
+        };
+
+        var INDEXDB = {
+            indexedDB: window.indexedDB || window.webkitindexedDB,
+            IDBKeyRange: window.IDBKeyRange || window.webkitIDBKeyRange//键范围
+        }
+
+		function openDB(dbname,dbversion,callback){
+			//建立或打开数据库，建立对象存储空间(ObjectStore)
+			var version = dbversion || 1;
+			var request = INDEXDB.indexedDB.open(dbname,version);
+			request.onerror = function(e){
+				console.log(e.currentTarget.error.message);
+			};
+			request.onsuccess = function(e){
+				appDB.db = e.target.result;
+				callback();
+			};
+			request.onupgradeneeded=function(e){
+				var db=e.target.result;
+				var transaction= e.target.transaction;
+				var store;
+				if(!db.objectStoreNames.contains(appDB.ojstore.name)){
+					//没有该对象空间时创建该对象空间
+					store = db.createObjectStore(appDB.ojstore.name,{keyPath:appDB.ojstore.keypath});
+				}
+			}
+		}
+
+		function deletedb(dbname){
+			//删除数据库
+			INDEXDB.indexedDB.deleteDatabase(dbname);
+		}
+
+		function closeDB(db){
+			//关闭数据库
+			db.close();
+		}
+
+		function addData(db,storename,data){
+			//添加数据，重复添加会报错
+			var store = db.transaction(storename,"readwrite").objectStore(storename),request;
+			for(var i = 0 ; i < data.length;i++){
+				request = store.add(data[i]);
+				request.onerror = function(){
+					console.error("add添加数据库中已有该数据")
+				};
+				request.onsuccess = function(){
+
+				};
+			}
+		}
+
+		function putData(db,storename,data){
+			//添加数据，重复添加会更新原有数据
+			var store = store = db.transaction(storename,"readwrite").objectStore(storename),request;
+			for(var i = 0 ; i < data.length;i++){
+				request = store.put(data[i]);
+				request.onerror = function(){
+					console.error("put添加数据库中已有该数据")
+				};
+				request.onsuccess = function(){
+
+				};
+			}
+		}
+
+		function getDataByKey(db,storename,key,callback){
+			//根据存储空间的键找到对应数据
+			var store = db.transaction(storename,"readwrite").objectStore(storename);
+			var request = store.get(key);
+			request.onerror = function(){
+				console.error("getDataByKey error");
+			};
+			request.onsuccess = function(e){
+				var result = e.target.result;
+                callback(result.pwd);
+			};
+		}
+
+		function deleteData(db,storename,key){
+			//删除某一条记录
+			var store = store = db.transaction(storename,"readwrite").objectStore(storename);
+			store.delete(key)
+
+		}
+
+		function clearData(db,storename){
+			//删除存储空间全部记录
+			var store = db.transaction(storename,"readwrite").objectStore(storename);
+			store.clear();
+
+		}
+
+
+        function opend() {
+            $("#appName").val("");
+            $("#pwd").val("");
+            $("#pwd_conform").val("");
+            $("#appName").focus();
+        }
+
+        function addPairs(){
+            $("#rePwdTips").hide();
+            var key= CryptoJS.enc.Utf8.parse(sessionStorage.factor);
+            var appName= $("#appName").val();
+            var pwd= $("#pwd").val();
+            var pwd_conform= $("#pwd_conform").val();
+			if (pwd == pwd_conform & pwd!="" & appName!="") {
+				pwd = CryptoJS.enc.Utf8.parse(pwd);
+				var pwd = aesEncrypt(pwd, key);
+				var kp = [{
+					appName: appName,
+					pwd: pwd
+				}];
+				if(isEdited){
+					addData(appDB.db, appDB.ojstore.name, kp);
+				}else {
+					putData(appDB.db, appDB.ojstore.name, kp);
+				}
+				showAll();
+				location.assign("#show-page");
+			}else{
+				$("#rePwdTips").show();
+			}
+        }
+
+        function editPwd() {
+            $("#appName").val( $("#editAppName").text());
+            $("#pwd").val("");
+            $("#pwd_conform").val("");
+            $("#pwd").focus();
+        }
+
+        function removeApp() {
+            var key= $("#editAppName").text();
+            deleteData(appDB.db, appDB.ojstore.name, key);
+            $("#popupMenu").popup( "close" );
+            showAll();
+        }
+
+        function showAll(){
+            $("#appList").empty();
+			var objectStore = appDB.db.transaction(appDB.ojstore.name).objectStore(appDB.ojstore.name);
+			objectStore.openCursor().onsuccess = function(event) {
+				var cursor = event.target.result;
+				if (cursor) {
+				    if("PBox_liuhong"!=cursor.key){
+                        var li = $("<li></li>");
+						var pwd = cursor.value.pwd;
+						var key = CryptoJS.enc.Utf8.parse(sessionStorage.factor);
+						pwd = aesDecrypt(pwd, key);
+						var liContent = "<a href=\"#\"><h2>" + cursor.key + " : " + pwd + "</h2></a>";
+						if(hasLogined) {
+                            liContent = liContent + "<a href=\"#popupMenu\" data-rel=\"popup\" data-transition=\"slideup\" onclick=\"document.getElementById('editAppName').innerHTML='" + cursor.key + "';document.getElementById('removeAppName').innerHTML='" + cursor.key + "'\" >更多</a>";
+                        }
+						li.html(liContent);
+                        $("#appList").append(li);
+
+                    }
+					cursor.continue();
+				}
+                $("#appList").listview("refresh");
+            };
+        }
+
+
+
+        function setFactor() {
+            openDB(appDB.name, appDB.version, setFactor2);
+        }
+		function setFactor2() {
+            var factor= $("#factor").val();
+			if (factor.length==16){//符合加密因子长度要求
+                factor = CryptoJS.enc.Utf8.parse(factor);
+                factor = md5Encrypt(factor);
+                var objectStore = appDB.db.transaction(appDB.ojstore.name).objectStore(appDB.ojstore.name);
+                var request= objectStore.openCursor();
+                request.onsuccess = function(event) {
+                    var cursor = event.target.result;
+                    var hasNotFound= true;
+                    if (cursor) {
+                        if("PBox_liuhong"==cursor.key){
+                            if (factor == cursor.value.pwd) {//一致，可以进入
+                                hasNotFound= false;
+                                sessionStorage.factor = $("#factor").val();
+                                hasLogined = true;
+                                $("#addButton").show();
+                                showAll();
+                            } else {
+                                hideButton();
+                            }
+ 						}
+                        cursor.continue();
+                    }
+
+                    if(hasNotFound & !hasLogined){
+                        //无加密因子，将录入内容加密后保存
+                        sessionStorage.factor = $("#factor").val();
+                        var kp = [{
+                            appName: "PBox_liuhong",
+                            pwd: factor
+                        }];
+                        addData(appDB.db, appDB.ojstore.name, kp);
+                        hasLogined = true;
+                        $("#addButton").show();
+                        showAll();
+                    }
+				}
+			}else{
+                hideButton();
+			}
+        }
+        
+        function hideButton() {
+            $("#addButton").hide();
+            hasLogined=false;
+            
+        }
+
+        function quitApp() {
+			window.close();
+        }
+
+        $(document).ready(function(){
+
+
+            $("#pwd").blur(function(){
+                $("#rePwdTips").hide();
+            });
+            $("#pwd_conform").blur(function(){
+                $("#rePwdTips").hide();
+            });
+        });
+	</script>
+</head>
+<body>
+	<div data-role="page" id="factor-page" data-url="factor-page">
+		<div data-role="header" data-position="fixed">
+			<h1>密码保管箱</h1>
+		</div>
+		<div data-role="content">
+			<img src="css/images/key.jpg" style="width:50%; margin-left:25%; margin-top:10%; margin-bottom: 10%;"/>
+			<form action="#" method="post">
+				<input type="text" name="factor" id="factor"	placeholder="密钥" />
+				<a href="#show-page"  onclick="setFactor()" data-role="button" >打开</a>
+			</form>
+		</div>
+	</div>
+
+	<div data-role="page" id="show-page" data-url="show-page">
+		<div data-role="header" data-position="fixed">
+			<a href="#" id="quitButton" data-role="button" onclick="quitApp()">退出</a>
+			<h1>密码保管箱</h1>
+			<a href="#add-page" id="addButton" data-role="button" onclick="opend()">录入</a>
+		</div>
+		<div data-role="content">
+			<ul id="appList" data-role="listview" data-filter="true" data-filter-placeholder="搜索..." data-split-icon="gear" data-split-theme="a" data-inset="true">
+
+			</ul>
+			<div data-role="popup" id="popupMenu" data-theme="b">
+				<ul data-role="listview" data-inset="true" style="min-width:210px;">
+					<li data-role="list-divider">请选择</li>
+					<li><a href="#add-page" onclick="editPwd()">修改密码<span id="editAppName"></span></a></li>
+					<li><a href="#" onclick="removeApp()">删除<span id="removeAppName"></span></a></li>
+				</ul>
+			</div>
+		</div>
+	</div>
+
+	<div data-role="page" id="add-page" data-url="add-page">
+		<div data-role="header" data-position="fixed">
+			<a href="#show-page" data-role="button" onclick="showAll()">显示</a>
+			<h1>密码保管箱</h1>
+		</div>
+		<div data-role="content">
+			<img src="css/images/key.jpg" style="width:50%; margin-left:25%; margin-top:10%; margin-bottom: 10%;"/>
+			<input type="text" name="appName" id="appName"	placeholder="应用名称" />
+			<input type="text" name="pwd" id="pwd"	placeholder="密码" />
+			<input type="text" name="pwd_conform" id="pwd_conform"	placeholder="确认密码" />
+			<p id="rePwdTips" style="color:red" hidden>两次输入的密码不一致，请重新输入！</p>
+			<a href="#" data-role="button" onclick="addPairs()">加密</a>
+		</div>
+	</div>
+
+
+</body>
+</html>
