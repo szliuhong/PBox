@@ -9,30 +9,9 @@
 <script src="js/jquery-2.1.0.min.js"></script>
 <script src="js/jquery.mobile-1.4.5.min.js"></script>
 <script src="js/crypto-js.js"></script>
+<script src="js/pbox.js"></script>
 	<script>
 		var isEdited= false;
-
-        function md5Encrypt(data) {
-            return CryptoJS.MD5(data).toString();
-        }
-
-        function aesEncrypt(data, key) {
-            var encrypted = CryptoJS.AES.encrypt(data, key, {
-                mode: CryptoJS.mode.ECB,
-                padding: CryptoJS.pad.Pkcs7
-            });
-            return encrypted.toString();
-        }
-
-        function aesDecrypt(encrypted, key) {
-            var decrypted = CryptoJS.AES.decrypt(encrypted, key, {
-                mode: CryptoJS.mode.ECB,
-                padding: CryptoJS.pad.Pkcs7
-            });
-            decrypted = CryptoJS.enc.Utf8.stringify(decrypted);// 转换为 utf8 字符串
-            return decrypted;
-        }
-
 		var hasLogined=false;
         
         var appDB={
@@ -119,7 +98,7 @@
 			};
 			request.onsuccess = function(e){
 				var result = e.target.result;
-                callback(result.pwd);
+                callback(result);
 			};
 		}
 
@@ -140,6 +119,8 @@
 
         function opend() {
             $("#appName").val("");
+            $("#appURL").val("");
+            $("#appUID").val("");
             $("#pwd").val("");
             $("#pwd_conform").val("");
             $("#appName").focus();
@@ -149,13 +130,17 @@
             $("#rePwdTips").hide();
             var key= CryptoJS.enc.Utf8.parse(sessionStorage.factor);
             var appName= $("#appName").val();
+            var appURL= $("#appURL").val();
+            var appUID= $("#appUID").val();
             var pwd= $("#pwd").val();
             var pwd_conform= $("#pwd_conform").val();
 			if (pwd == pwd_conform & pwd!="" & appName!="") {
 				pwd = CryptoJS.enc.Utf8.parse(pwd);
-				var pwd = aesEncrypt(pwd, key);
+				pwd = aesEncrypt(pwd, key);
 				var kp = [{
 					appName: appName,
+					appURL: appURL,
+					appUID: appUID,
 					pwd: pwd
 				}];
 				if(isEdited){
@@ -170,11 +155,23 @@
 			}
         }
 
-        function editPwd() {
-            $("#appName").val( $("#editAppName").text());
-            $("#pwd").val("");
-            $("#pwd_conform").val("");
+        function setTextCallback(result) {
+            $("#appName").val(result.appName);
+            $("#appURL").val(result.appURL);
+            $("#appUID").val(result.appUID);
+            var pwd= result.pwd;
+            var key = CryptoJS.enc.Utf8.parse(sessionStorage.factor);
+            pwd = aesDecrypt(pwd, key);
+            $("#pwd").attr("placeholder",pwd);
+            $("#pwd_conform").attr("placeholder",pwd);
             $("#pwd").focus();
+        }
+
+        function editPwd() {
+            var appName= $("#editAppName").text();
+            getDataByKey(appDB.db, appDB.ojstore.name, appName, setTextCallback);
+
+
         }
 
         function removeApp() {
@@ -193,9 +190,11 @@
 				    if("PBox_liuhong"!=cursor.key){
                         var li = $("<li></li>");
 						var pwd = cursor.value.pwd;
+						var appURL= cursor.value.appURL;
+						var appUID= cursor.value.appUID;
 						var key = CryptoJS.enc.Utf8.parse(sessionStorage.factor);
 						pwd = aesDecrypt(pwd, key);
-						var liContent = "<a href=\"#\"><h2>" + cursor.key + " : " + pwd + "</h2></a>";
+						var liContent = "<a href=\"#\"><h2>" + cursor.key + "</h2><p>" + appUID + " : " + pwd + "</p></a>";
 						if(hasLogined) {
                             liContent = liContent + "<a href=\"#popupMenu\" data-rel=\"popup\" data-transition=\"slideup\" onclick=\"document.getElementById('editAppName').innerHTML='" + cursor.key + "';document.getElementById('removeAppName').innerHTML='" + cursor.key + "'\" >更多</a>";
                         }
@@ -244,6 +243,8 @@
                         sessionStorage.factor = $("#factor").val();
                         var kp = [{
                             appName: "PBox_liuhong",
+							appURL: "",
+							appUID: "",
                             pwd: factor
                         }];
                         addData(appDB.db, appDB.ojstore.name, kp);
@@ -321,6 +322,8 @@
 		<div data-role="content">
 			<img src="css/images/key.jpg" style="width:50%; margin-left:25%; margin-top:10%; margin-bottom: 10%;"/>
 			<input type="text" name="appName" id="appName"	placeholder="应用名称" />
+			<input type="text" name="appURL" id="appURL" placeholder="应用地址" />
+			<input type="text" name="appUId" id="appUID" placeholder="用户名"/>
 			<input type="text" name="pwd" id="pwd"	placeholder="密码" />
 			<input type="text" name="pwd_conform" id="pwd_conform"	placeholder="确认密码" />
 			<p id="rePwdTips" style="color:red" hidden>两次输入的密码不一致，请重新输入！</p>
