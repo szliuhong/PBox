@@ -10,6 +10,7 @@
 <script src="js/jquery.mobile-1.4.5.min.js"></script>
 <script src="js/crypto-js.js"></script>
 <script src="js/pbox.js"></script>
+	<!--suppress JSUnresolvedFunction -->
 	<script>
 		var isEdited= false;
 		var hasLogined=false;
@@ -77,7 +78,7 @@
 
 		function putData(db,storename,data){
 			//添加数据，重复添加会更新原有数据
-			var store = store = db.transaction(storename,"readwrite").objectStore(storename),request;
+			var store = db.transaction(storename,"readwrite").objectStore(storename),request;
 			for(var i = 0 ; i < data.length;i++){
 				request = store.put(data[i]);
 				request.onerror = function(){
@@ -104,7 +105,7 @@
 
 		function deleteData(db,storename,key){
 			//删除某一条记录
-			var store = store = db.transaction(storename,"readwrite").objectStore(storename);
+			var store = db.transaction(storename,"readwrite").objectStore(storename);
 			store.delete(key)
 
 		}
@@ -118,12 +119,11 @@
 
 
         function opend() {
-            $("#appName").val("");
+            $("#appName").val("").focus();
             $("#appURL").val("");
             $("#appUID").val("");
             $("#pwd").val("");
-            $("#pwd_conform").val("");
-            $("#appName").focus();
+            // $("#pwd_conform").val("");
         }
 
         function addPairs(){
@@ -133,8 +133,9 @@
             var appURL= $("#appURL").val();
             var appUID= $("#appUID").val();
             var pwd= $("#pwd").val();
-            var pwd_conform= $("#pwd_conform").val();
-			if (pwd == pwd_conform & pwd!="" & appName!="") {
+            // var pwd_conform= $("#pwd_conform").val();
+			// if (pwd == pwd_conform & pwd!="" & appName!="") {
+			if (pwd!="" && appName!="") {
 				pwd = CryptoJS.enc.Utf8.parse(pwd);
 				pwd = aesEncrypt(pwd, key);
 				var kp = [{
@@ -163,7 +164,7 @@
             var key = CryptoJS.enc.Utf8.parse(sessionStorage.factor);
             pwd = aesDecrypt(pwd, key);
             $("#pwd").attr("placeholder",pwd);
-            $("#pwd_conform").attr("placeholder",pwd);
+            // $("#pwd_conform").attr("placeholder",pwd);
             $("#pwd").focus();
         }
 
@@ -183,29 +184,28 @@
 
         function showAll(){
             $("#appList").empty();
-			var objectStore = appDB.db.transaction(appDB.ojstore.name).objectStore(appDB.ojstore.name);
-			objectStore.openCursor().onsuccess = function(event) {
-				var cursor = event.target.result;
-				if (cursor) {
-				    if("PBox_liuhong"!=cursor.key){
-                        var li = $("<li></li>");
-						var pwd = cursor.value.pwd;
-						var appURL= cursor.value.appURL;
-						var appUID= cursor.value.appUID;
-						var key = CryptoJS.enc.Utf8.parse(sessionStorage.factor);
-						pwd = aesDecrypt(pwd, key);
-						var liContent = "<a href=\"#\"><h2>" + cursor.key + "</h2><p>" + appUID + " : " + pwd + "</p></a>";
-						if(hasLogined) {
-                            liContent = liContent + "<a href=\"#popupMenu\" data-rel=\"popup\" data-transition=\"slideup\" onclick=\"document.getElementById('editAppName').innerHTML='" + cursor.key + "';document.getElementById('removeAppName').innerHTML='" + cursor.key + "'\" >更多</a>";
-                        }
-						li.html(liContent);
-                        $("#appList").append(li);
-
-                    }
-					cursor.continue();
+			if(hasLogined) {
+				var objectStore = appDB.db.transaction(appDB.ojstore.name).objectStore(appDB.ojstore.name);
+				objectStore.openCursor().onsuccess = function (event) {
+					var cursor = event.target.result;
+					if (cursor) {
+						if ("PBox_liuhong" != cursor.key) {
+							var li = $("<li></li>");
+							var pwd = cursor.value.pwd;
+							var appURL = cursor.value.appURL;
+							var appUID = cursor.value.appUID;
+							var key = CryptoJS.enc.Utf8.parse(sessionStorage.factor);
+							pwd = aesDecrypt(pwd, key);
+							var liContent = "<a href=\"#\"><h2>" + cursor.key + "</h2><p>" + appUID + " : " + pwd + "</p></a>";
+							liContent = liContent + "<a href=\"#popupMenu\" data-rel=\"popup\" data-transition=\"slideup\" onclick=\"document.getElementById('editAppName').innerHTML='" + cursor.key + "';document.getElementById('removeAppName').innerHTML='" + cursor.key + "'\" >更多</a>";
+							li.html(liContent);
+							$("#appList").append(li);
+						}
+						cursor.continue();
+					}
+					$("#appList").listview("refresh");
 				}
-                $("#appList").listview("refresh");
-            };
+			}
         }
 
 
@@ -215,6 +215,7 @@
         }
 		function setFactor2() {
             var factor= $("#factor").val();
+            //登录输入的密码长度必须是16位，如果是第一次使用，数据库中找不到记录，hasNotFound为true，将这个密码加密后放入数据库；如果找到，则对比是否一致
 			if (factor.length==16){//符合加密因子长度要求
                 factor = CryptoJS.enc.Utf8.parse(factor);
                 factor = md5Encrypt(factor);
@@ -230,14 +231,15 @@
                                 sessionStorage.factor = $("#factor").val();
                                 hasLogined = true;
                                 $("#addButton").show();
-                                showAll();
+                                location.assign("#show-page");
+								showAll();
                             } else {
-                                hideButton();
+								quitApp();
                             }
  						}
                         cursor.continue();
                     }
-
+					//数据库中没找到记录，是第一次使用
                     if(hasNotFound & !hasLogined){
                         //无加密因子，将录入内容加密后保存
                         sessionStorage.factor = $("#factor").val();
@@ -254,23 +256,18 @@
                     }
 				}
 			}else{
-                hideButton();
+				quitApp();
 			}
         }
         
-        function hideButton() {
-            $("#addButton").hide();
-            hasLogined=false;
-            
-        }
-
         function quitApp() {
-			window.close();
+			$("#factor").val("");
+			hasLogined=false;
+			location.assign("#factor-page");
+        	//window.close();
         }
 
         $(document).ready(function(){
-
-
             $("#pwd").blur(function(){
                 $("#rePwdTips").hide();
             });
@@ -289,14 +286,14 @@
 			<img src="css/images/key.jpg" style="width:50%; margin-left:25%; margin-top:10%; margin-bottom: 10%;"/>
 			<form action="#" method="post">
 				<input type="text" name="factor" id="factor"	placeholder="密钥" />
-				<a href="#show-page"  onclick="setFactor()" data-role="button" >打开</a>
+				<a href="#"  onclick="setFactor()" data-role="button" >打开</a>
 			</form>
 		</div>
 	</div>
 
 	<div data-role="page" id="show-page" data-url="show-page">
 		<div data-role="header" data-position="fixed">
-			<a href="#" id="quitButton" data-role="button" onclick="quitApp()">退出</a>
+			<a href="#factor-page" id="quitButton" data-role="button" onclick="quitApp()">退出</a>
 			<h1>密码保管箱</h1>
 			<a href="#add-page" id="addButton" data-role="button" onclick="opend()">录入</a>
 		</div>
@@ -325,8 +322,8 @@
 			<input type="text" name="appURL" id="appURL" placeholder="应用地址" />
 			<input type="text" name="appUId" id="appUID" placeholder="用户名"/>
 			<input type="text" name="pwd" id="pwd"	placeholder="密码" />
-			<input type="text" name="pwd_conform" id="pwd_conform"	placeholder="确认密码" />
-			<p id="rePwdTips" style="color:red" hidden>两次输入的密码不一致，请重新输入！</p>
+<!--			<input type="text" name="pwd_conform" id="pwd_conform"	placeholder="确认密码" />-->
+			<p id="rePwdTips" style="color:red" hidden>应用名称和密码都不能为空，请重新输入！</p>
 			<a href="#" data-role="button" onclick="addPairs()">加密</a>
 		</div>
 	</div>
