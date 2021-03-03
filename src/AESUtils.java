@@ -69,7 +69,7 @@ public class AESUtils {
 
     public static void main(String[] args){
 	  	  String pwd= "XXX系统";
-	  	  String key= "4453486@gdsSzjy.";
+	  	  String key= "1234567890123456";
 	  	  try{
 	  		  byte[] pwd2= AESUtils.encrypt(pwd.getBytes(),key.getBytes());
 	  		  byte[] pwd3= AESUtils.decrypt(pwd2, key.getBytes());
